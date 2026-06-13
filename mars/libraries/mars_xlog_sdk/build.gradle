@@ -1,24 +1,30 @@
 apply plugin: 'com.android.library'
+apply plugin: 'maven-publish'
 
-apply from: rootProject.file('gradle/WeChatPublish.gradle')
-
-group PROJ_GROUP
-version PROJ_VERSION
-artifactId = PROJ_ARTIFACTID
+group = PROJ_GROUP
+version = PROJ_VERSION
 
 android {
-    compileSdkVersion 31
-    buildToolsVersion '30.0.2'
+    namespace 'com.tencent.mars'
+    compileSdk 35
+    ndkVersion '28.2.13676358'
+
     defaultConfig {
-        minSdkVersion 19
-        targetSdkVersion 29
+        minSdk 21
+        targetSdk 35
+
         ndk {
-            // TODO: changes this for your application if needed
-            moduleName = "mmnet"
-            abiFilter "armeabi"
-            abiFilter "armeabi-v7a"
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86_64"
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_STL=c++_shared"
+                targets "marsxlog"
+            }
         }
     }
+
     sourceSets {
         main {
             java {
@@ -32,13 +38,42 @@ android {
             }
         }
     }
+
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_7
-        targetCompatibility JavaVersion.VERSION_1_7
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
     }
+
+    externalNativeBuild {
+        cmake {
+            path file('CMakeLists.txt')
+            version '3.30.5'
+        }
+    }
+
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+        }
+    }
+
     buildTypes {
         release {
             proguardFile 'proguard-rules.pro'
+        }
+    }
+}
+
+publishing {
+    publications {
+        release(MavenPublication) {
+            groupId = PROJ_GROUP
+            artifactId = PROJ_ARTIFACTID
+            version = PROJ_VERSION
+
+            afterEvaluate {
+                from components.release
+            }
         }
     }
 }

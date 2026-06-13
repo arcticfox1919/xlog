@@ -1,0 +1,8 @@
+jdk:
+  - openjdk17
+
+before_install:
+  - yes | sdkmanager "ndk;28.2.13676358" "cmake;3.30.5"
+
+install:
+  - cd mars && ./gradlew :libraries:mars_xlog_sdk:publishToMavenLocal

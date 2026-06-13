@@ -13,6 +13,9 @@ xcuserdata
 xcshareddata
 
 /mars/libraries/*/
+!/mars/libraries/mars_xlog_sdk/
+!/mars/libraries/mars_xlog_sdk/CMakeLists.txt
+/mars/libraries/mars_xlog_sdk/.cxx/
 /mars/*/libs/
 !/mars/boost/libs/
 /samples/iOS/iOSDemo/Kernel/MarsLib/

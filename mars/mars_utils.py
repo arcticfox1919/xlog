@@ -392,7 +392,7 @@ def parse_as_git(path):
     os.chdir(path)
     revision = os.popen('git rev-parse --short HEAD').read().strip()
     path = os.popen('git rev-parse --abbrev-ref HEAD').read().strip()
-    url = ''
+    url = os.popen('git config --get remote.origin.url').read().strip()
     os.chdir(curdir)
 
     return revision, path, url

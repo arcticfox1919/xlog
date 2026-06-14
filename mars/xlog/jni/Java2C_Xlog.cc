@@ -307,6 +307,31 @@ JNIEXPORT void JNICALL Java_com_tencent_mars_xlog_Xlog_setMaxAliveTime(JNIEnv* e
                                                                        jlong _max_time) {
     mars::xlog::SetMaxAliveTime(_log_instance_ptr, _max_time);
 }
+
+JNIEXPORT jobjectArray JNICALL Java_com_tencent_mars_xlog_Xlog_getFilePathFromTimeSpan(JNIEnv* env,
+                                                                                       jobject,
+                                                                                       jlong _log_instance_ptr,
+                                                                                       jint _timespan,
+                                                                                       jstring _prefix) {
+    std::string prefix_str;
+    if (NULL != _prefix) {
+        ScopedJstring prefix_jstr(env, _prefix);
+        prefix_str = prefix_jstr.GetChar();
+    }
+
+    std::vector<std::string> filepath_vec;
+    mars::xlog::GetFilePathFromTimeSpan(_log_instance_ptr, _timespan, prefix_str.c_str(), filepath_vec);
+
+    jclass string_clazz = env->FindClass("java/lang/String");
+    jobjectArray result = env->NewObjectArray((jsize)filepath_vec.size(), string_clazz, NULL);
+    for (jsize i = 0; i < (jsize)filepath_vec.size(); ++i) {
+        jstring path = env->NewStringUTF(filepath_vec[i].c_str());
+        env->SetObjectArrayElement(result, i, path);
+        env->DeleteLocalRef(path);
+    }
+    env->DeleteLocalRef(string_clazz);
+    return result;
+}
 }
 
 void ExportXlog() {

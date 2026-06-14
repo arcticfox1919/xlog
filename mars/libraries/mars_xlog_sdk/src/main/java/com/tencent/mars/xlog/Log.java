@@ -7,7 +7,9 @@ import android.os.Process;
 import android.widget.Toast;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 
 /**
@@ -63,6 +65,8 @@ public class Log {
         void setMaxFileSize(long logInstancePtr, long aliveSeconds);
 
         void setMaxAliveTime(long logInstancePtr, long aliveSeconds);
+
+        String[] getFilePathFromTimeSpan(long logInstancePtr, int timeSpan, String prefix);
 
     }
 
@@ -175,6 +179,11 @@ public class Log {
         @Override
         public void setMaxFileSize(long logInstancePtr, long aliveSeconds) {
 
+        }
+
+        @Override
+        public String[] getFilePathFromTimeSpan(long logInstancePtr, int timeSpan, String prefix) {
+            return new String[0];
         }
 
     };
@@ -434,6 +443,12 @@ public class Log {
         }
     }
 
+    public static Set<String> getLogInstancePrefixes() {
+        synchronized (sLogInstanceMap) {
+            return new HashSet<>(sLogInstanceMap.keySet());
+        }
+    }
+
     public static class LogInstance {
 
         private long mLogInstancePtr = 0;
@@ -540,6 +555,17 @@ public class Log {
             if (null != logImp && mLogInstancePtr != 0) {
                 logImp.setConsoleLogOpen(mLogInstancePtr, isOpen);
             }
+        }
+
+        /**
+         * Returns this instance's log file paths over the last {@code timeSpan}
+         * days counting back from today (0 = today only).
+         */
+        public String[] getFilesFromTimeSpan(int timeSpan) {
+            if (null != logImp && mLogInstancePtr != 0) {
+                return logImp.getFilePathFromTimeSpan(mLogInstancePtr, timeSpan, mPrefix);
+            }
+            return new String[0];
         }
 
 

@@ -22,6 +22,9 @@
 
 #include <stdint.h>
 
+#include <string>
+#include <vector>
+
 #include "appender.h"
 #include "xloggerbase.h"
 
@@ -61,6 +64,13 @@ void SetConsoleLogOpen(uintptr_t _instance_ptr, bool _is_open);
 void SetMaxFileSize(uintptr_t _instance_ptr, long _max_file_size);
 
 void SetMaxAliveTime(uintptr_t _instance_ptr, long _alive_seconds);
+
+// Returns the log file paths for the given instance over [_timespan] days back
+// from today (0 = today). _instance_ptr == 0 targets the global appender.
+bool GetFilePathFromTimeSpan(uintptr_t _instance_ptr,
+                             int _timespan,
+                             const char* _prefix,
+                             std::vector<std::string>& _filepath_vec);
 
 }  // namespace xlog
 }  // namespace mars

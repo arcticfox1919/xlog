@@ -178,4 +178,7 @@ public class Xlog implements Log.LogImp {
 	@Override
 	public native void setMaxAliveTime(long logInstancePtr, long aliveSeconds);
 
+	@Override
+	public native String[] getFilePathFromTimeSpan(long logInstancePtr, int timeSpan, String prefix);
+
 }

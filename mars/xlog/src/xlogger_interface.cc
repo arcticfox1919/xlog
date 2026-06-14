@@ -195,5 +195,17 @@ void SetMaxAliveTime(uintptr_t _instance_ptr, long _alive_seconds) {
     }
 }
 
+bool GetFilePathFromTimeSpan(uintptr_t _instance_ptr,
+                             int _timespan,
+                             const char* _prefix,
+                             std::vector<std::string>& _filepath_vec) {
+    if (0 == _instance_ptr) {
+        return appender_getfilepath_from_timespan(_timespan, _prefix, _filepath_vec);
+    }
+    XloggerCategory* category = reinterpret_cast<XloggerCategory*>(_instance_ptr);
+    XloggerAppender* appender = reinterpret_cast<XloggerAppender*>(category->GetAppender());
+    return appender->GetfilepathFromTimespan(_timespan, _prefix, _filepath_vec);
+}
+
 }  // namespace xlog
 }  // namespace mars

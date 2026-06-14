@@ -74,15 +74,6 @@ void log_formater(const XLoggerInfo* _info, const char* _logbody, PtrBuffer& _lo
     }
 
     if (NULL != _info) {
-        const char* filename = ExtractFileName(_info->filename);
-
-#if _WIN32
-        char strFuncName[128] = {0};
-        ExtractFunctionName(_info->func_name, strFuncName, sizeof(strFuncName));
-#else
-        const char* strFuncName = NULL == _info->func_name ? "" : _info->func_name;
-#endif
-
         char temp_time[64] = {0};
 
         if (0 != _info->timeval.tv_sec) {
@@ -92,55 +83,55 @@ void log_formater(const XLoggerInfo* _info, const char* _logbody, PtrBuffer& _lo
 #ifdef ANDROID
             snprintf(temp_time,
                      sizeof(temp_time),
-                     "%d-%02d-%02d %+.1f %02d:%02d:%02d.%.3ld",
+                     "%d-%02d-%02d %02d:%02d:%02d.%.3ld %+03d:%02d",
                      1900 + tm.tm_year,
                      1 + tm.tm_mon,
                      tm.tm_mday,
-                     tm.tm_gmtoff / 3600.0,
                      tm.tm_hour,
                      tm.tm_min,
                      tm.tm_sec,
-                     _info->timeval.tv_usec / 1000);
+                     _info->timeval.tv_usec / 1000,
+                     (int)(tm.tm_gmtoff / 3600),
+                     (int)(labs(tm.tm_gmtoff) % 3600 / 60));
 #elif _WIN32
             snprintf(temp_time,
                      sizeof(temp_time),
-                     "%d-%02d-%02d %+.1f %02d:%02d:%02d.%.3d",
+                     "%d-%02d-%02d %02d:%02d:%02d.%.3d %+03d:%02d",
                      1900 + tm.tm_year,
                      1 + tm.tm_mon,
                      tm.tm_mday,
-                     (-_timezone) / 3600.0,
                      tm.tm_hour,
                      tm.tm_min,
                      tm.tm_sec,
-                     _info->timeval.tv_usec / 1000);
+                     _info->timeval.tv_usec / 1000,
+                     (int)(-_timezone / 3600),
+                     (int)(labs(_timezone) % 3600 / 60));
 #else
             snprintf(temp_time,
                      sizeof(temp_time),
-                     "%d-%02d-%02d %+.1f %02d:%02d:%02d.%.3d",
+                     "%d-%02d-%02d %02d:%02d:%02d.%.3d %+03d:%02d",
                      1900 + tm.tm_year,
                      1 + tm.tm_mon,
                      tm.tm_mday,
-                     tm.tm_gmtoff / 3600.0,
                      tm.tm_hour,
                      tm.tm_min,
                      tm.tm_sec,
-                     _info->timeval.tv_usec / 1000);
+                     _info->timeval.tv_usec / 1000,
+                     (int)(tm.tm_gmtoff / 3600),
+                     (int)(labs(tm.tm_gmtoff) % 3600 / 60));
 #endif
         }
 
         // _log.AllocWrite(30*1024, false);
         int ret = snprintf((char*)_log.PosPtr(),
                            1024,
-                           "[%s][%s][%" PRIdMAX ", %" PRIdMAX "%s][%s][%s:%d, %s][",  // **CPPLINT SKIP**
+                           "[%s][%s][%" PRIdMAX ", %" PRIdMAX "%s][%s] ",  // **CPPLINT SKIP**
                            _logbody ? levelStrings[_info->level] : levelStrings[kLevelFatal],
                            temp_time,
                            _info->pid,
                            _info->tid,
                            _info->tid == _info->maintid ? "*" : "",
-                           _info->tag ? _info->tag : "",
-                           filename,
-                           _info->line,
-                           strFuncName);
+                           _info->tag ? _info->tag : "");
 
         assert(0 <= ret);
         _log.Length(_log.Pos() + ret, _log.Length() + ret);

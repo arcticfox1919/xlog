@@ -2,11 +2,11 @@
 #ifndef Mars_verinfo_h
 #define Mars_verinfo_h
 
-#define MARS_REVISION "38eea3ee"
-#define MARS_PATH "release/2024-t2.1"
-#define MARS_URL ""
-#define MARS_BUILD_TIME "2024-07-30 17:02:21"
-#define MARS_TAG ""
-#define MARS_BUILD_TIMESTAMP 1722330141
+#define MARS_REVISION "331e7373"
+#define MARS_PATH "flutter_plugin"
+#define MARS_URL "git@github.com:arcticfox1919/xlog.git"
+#define MARS_BUILD_TIME "2026-06-14 18:41:28"
+#define MARS_TAG "arcticfox-fork"
+#define MARS_BUILD_TIMESTAMP 1781433688
 
 #endif

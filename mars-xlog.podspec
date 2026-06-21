@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'mars-xlog'
-  s.version = '1.3.4'
+  s.version = '1.3.5'
   s.summary = 'Tencent Mars xlog binary framework for iOS.'
   s.description = 'Tencent Mars xlog binary XCFramework with Swift API and iOS device/simulator support.'
   s.homepage = 'https://github.com/arcticfox1919/xlog'
@@ -33,7 +33,7 @@ THE SOFTWARE.
   s.platform = :ios, '11.0'
   s.source = {
     :http => "https://github.com/arcticfox1919/xlog/releases/download/#{s.version}/mars-xlog.xcframework.zip",
-    :sha256 => '2a288a6eec75af5a2c61e90398b5b71f282832c8d9b877f06b9210fb6002486f'
+    :sha256 => 'dbbbe5740ea4fd9e499080a269fb9437349afb45295b5f6e84be765c6931bba9'
   }
 
   s.vendored_frameworks = 'mars.xcframework'

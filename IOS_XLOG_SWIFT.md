@@ -6,7 +6,7 @@
 
 ```bash
 cd mars
-python3 build_ios.py xlog-xcframework 1.3.4
+python3 build_ios.py xlog-xcframework 1.3.5
 ```
 
 The command creates:
@@ -76,7 +76,7 @@ if let paymentLog = MarsXLog.openInstance(with: paymentConfiguration) {
 
 ## CocoaPods release
 
-Before publishing version 1.3.4, upload `mars-xlog.xcframework.zip` to the GitHub release named `1.3.4`, then run:
+Before publishing version 1.3.5, upload `mars-xlog.xcframework.zip` to the GitHub release named `1.3.5`, then run:
 
 ```bash
 pod spec lint mars-xlog.podspec --allow-warnings

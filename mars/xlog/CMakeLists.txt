@@ -72,6 +72,10 @@ endif()
 
 BuildWithUnitTest("${PROJECT_NAME}" "${SELF_SRC_FILES}")
 
+if(APPLE AND TARGET ${PROJECT_NAME})
+    set_source_files_properties(objc/MarsXLog.mm PROPERTIES COMPILE_FLAGS "-fobjc-arc")
+endif()
+
 
     
     

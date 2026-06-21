@@ -14,13 +14,14 @@ INSTALL_PATH = BUILD_OUT_PATH + '/iOS.out'
 
 IOS_BUILD_SIMULATOR_CMD = 'cmake ../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../../ios.toolchain.cmake -DPLATFORM=SIMULATOR -DENABLE_ARC=0 -DENABLE_BITCODE=0 -DENABLE_VISIBILITY=1 && make -j8 && make install'
 IOS_BUILD_OS_CMD = 'cmake ../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../../ios.toolchain.cmake -DPLATFORM=OS -DENABLE_ARC=0 -DENABLE_BITCODE=0 -DENABLE_VISIBILITY=1 && make -j8 && make install'
-IOS_XLOG_BUILD_CMD = 'cmake ../../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../../../ios.toolchain.cmake -DPLATFORM=%s -DIOS_ARCH="arm64" -DENABLE_ARC=0 -DENABLE_BITCODE=0 -DENABLE_VISIBILITY=1 && make -j8 && make install'
+IOS_XLOG_BUILD_CMD = 'cmake ../../.. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=../../../ios.toolchain.cmake -DPLATFORM=%s -DDEPLOYMENT_TARGET=11.0 -DMARS_BUILD_XLOG_ONLY=ON -DENABLE_ARC=0 -DENABLE_BITCODE=0 -DENABLE_VISIBILITY=1 && make -j8 && make install'
 
 GEN_IOS_OS_PROJ = 'cmake ../.. -G Xcode -DCMAKE_TOOLCHAIN_FILE=../../ios.toolchain.cmake -DPLATFORM=OS -DIOS_ARCH="arm64" -DENABLE_ARC=0 -DENABLE_BITCODE=0 -DENABLE_VISIBILITY=1'
 OPEN_SSL_ARCHS = ['x86_64', 'arm64']
 
 XLOG_DEVICE_BUILD_PATH = BUILD_OUT_PATH + '/xlog-device-arm64'
-XLOG_SIMULATOR_BUILD_PATH = BUILD_OUT_PATH + '/xlog-simulator-arm64'
+XLOG_SIMULATOR_ARM64_BUILD_PATH = BUILD_OUT_PATH + '/xlog-simulator-arm64'
+XLOG_SIMULATOR_X86_64_BUILD_PATH = BUILD_OUT_PATH + '/xlog-simulator-x86_64'
 XLOG_XCFRAMEWORK_OUT = INSTALL_PATH + '/mars.xcframework'
 XLOG_XCFRAMEWORK_ZIP = INSTALL_PATH + '/mars-xlog.xcframework.zip'
 
@@ -73,14 +74,13 @@ def _complete_static_framework(dst_framework, version):
 
     with open(modulemap_path, 'w') as f:
         f.write('''framework module {name} {{
-    umbrella "Headers"
+    header "MarsXLog.h"
     export *
-    module * {{ export * }}
 }}
 '''.format(name=name))
 
 
-def _build_ios_xlog_framework(build_path, platform, dst_framework_path, version):
+def _build_ios_xlog_library(build_path, platform):
     clean(build_path)
     os.chdir(build_path)
 
@@ -98,6 +98,10 @@ def _build_ios_xlog_framework(build_path, platform, dst_framework_path, version)
     if not libtool_libs(_xlog_static_libs(build_path), static_lib_path):
         return False
 
+    return static_lib_path
+
+
+def _make_ios_xlog_framework(static_lib_path, dst_framework_path, version):
     make_static_framework(static_lib_path, dst_framework_path, XLOG_COPY_HEADER_FILES, '../')
     _complete_static_framework(dst_framework_path, version)
     return True
@@ -226,15 +230,34 @@ def build_ios_xlog(tag=''):
 
 def build_ios_xlog_xcframework(tag=''):
     gen_mars_revision_file('comm', tag)
-    version = tag if tag else '1.3.1'
+    version = tag if tag else '1.3.4'
 
     device_framework_path = INSTALL_PATH + '/iphoneos/mars.framework'
     simulator_framework_path = INSTALL_PATH + '/iphonesimulator/mars.framework'
 
-    if not _build_ios_xlog_framework(XLOG_DEVICE_BUILD_PATH, 'OS', device_framework_path, version):
+    device_lib = _build_ios_xlog_library(XLOG_DEVICE_BUILD_PATH, 'OS')
+    if not device_lib:
         return False
 
-    if not _build_ios_xlog_framework(XLOG_SIMULATOR_BUILD_PATH, 'SIMULATORARM64', simulator_framework_path, version):
+    simulator_arm64_lib = _build_ios_xlog_library(XLOG_SIMULATOR_ARM64_BUILD_PATH, 'SIMULATORARM64')
+    if not simulator_arm64_lib:
+        return False
+
+    simulator_x86_64_lib = _build_ios_xlog_library(XLOG_SIMULATOR_X86_64_BUILD_PATH, 'SIMULATOR64')
+    if not simulator_x86_64_lib:
+        return False
+
+    simulator_universal_lib = BUILD_OUT_PATH + '/xlog-simulator-universal/mars'
+    simulator_universal_dir = os.path.dirname(simulator_universal_lib)
+    if not os.path.exists(simulator_universal_dir):
+        os.makedirs(simulator_universal_dir)
+    if not lipo_libs([simulator_arm64_lib, simulator_x86_64_lib], simulator_universal_lib):
+        return False
+
+    if not _make_ios_xlog_framework(device_lib, device_framework_path, version):
+        return False
+
+    if not _make_ios_xlog_framework(simulator_universal_lib, simulator_framework_path, version):
         return False
 
     if not _create_xlog_xcframework(device_framework_path, simulator_framework_path):

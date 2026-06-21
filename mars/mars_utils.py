@@ -76,6 +76,7 @@ UNIX_COPY_EXT_FILES = {
 }
 
 XLOG_COPY_HEADER_FILES = {
+    "mars/xlog/objc/MarsXLog.h": "",
     "mars/comm/verinfo.h": "comm",
     "mars/comm/autobuffer.h": "comm",
     "mars/comm/http.h": "comm",

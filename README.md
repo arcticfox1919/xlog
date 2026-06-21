@@ -172,6 +172,8 @@ If you want to modify the encryption algorithm of Xlog, the packer/unpacker of l
 ### <a name="apple">[iOS/OS X](https://github.com/Tencent/mars/wiki/Mars-iOS%EF%BC%8FOS-X-%E6%8E%A5%E5%85%A5%E6%8C%87%E5%8D%97)</a>
 Compile
 
+For the binary CocoaPod and Swift API, see [mars-xlog for Swift](IOS_XLOG_SWIFT.md).
+
 ```python
 python build_ios.py
 ```
@@ -576,6 +578,8 @@ StnLogic.reset();
 
 ### <a name="apple_cn">[iOS/OS X](https://github.com/Tencent/mars/wiki/Mars-iOS%EF%BC%8FOS-X-%E6%8E%A5%E5%85%A5%E6%8C%87%E5%8D%97)</a>
 编译
+
+二进制 CocoaPod、XCFramework 打包和 Swift API 的用法见 [mars-xlog Swift 接入](IOS_XLOG_SWIFT.md)。
 
 ```
 python build_ios.py

@@ -1,6 +1,6 @@
 package com.tencent.mars.xlog;
 
-public class Xlog implements Log.LogImp {
+public class Xlog implements Log.ConfigurableLogImp {
 
 	public static final int LEVEL_ALL = 0;
 	public static final int LEVEL_VERBOSE = 0;
@@ -150,6 +150,12 @@ public class Xlog implements Log.LogImp {
 		logConfig.pubkey = "";
 		logConfig.cachedir = cacheDir;
 		logConfig.cachedays = cacheDays;
+		return newXlogInstance(logConfig);
+	}
+
+	/** Passes all instance settings to the existing JNI factory unchanged. */
+	@Override
+	public long openLogInstance(XLogConfig logConfig) {
 		return newXlogInstance(logConfig);
 	}
 

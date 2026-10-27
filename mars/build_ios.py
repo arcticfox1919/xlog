@@ -226,7 +226,7 @@ def build_ios_xlog(tag=''):
 
 def build_ios_xlog_xcframework(tag=''):
     gen_mars_revision_file('comm', tag)
-    version = tag if tag else '1.3.1'
+    version = tag if tag else '1.3.6'
 
     device_framework_path = INSTALL_PATH + '/iphoneos/mars.framework'
     simulator_framework_path = INSTALL_PATH + '/iphonesimulator/mars.framework'

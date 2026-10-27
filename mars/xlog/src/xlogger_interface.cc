@@ -209,3 +209,69 @@ bool GetFilePathFromTimeSpan(uintptr_t _instance_ptr,
 
 }  // namespace xlog
 }  // namespace mars
+
+// C ABI adapter. The upstream instance lifecycle and write paths stay unchanged.
+struct XLoggerWriter {
+    uintptr_t target;
+    std::string tag;
+    XLoggerInfo info = XLOGGER_INFO_INITIALIZER;
+    bool writing = false;
+
+    XLoggerWriter(uintptr_t instance, const char* fixed_tag) : target(instance), tag(fixed_tag) {
+        info.tag = tag.c_str();
+        info.filename = "";
+        info.func_name = "";
+        info.pid = xlogger_pid();
+        info.maintid = xlogger_maintid();
+    }
+};
+
+XLoggerWriter* xlogger_writer_acquire_existing(const char* prefix, const char* tag) {
+    uintptr_t target = 0;
+    if (prefix != nullptr) {
+        if (*prefix == '\0') return nullptr;
+        auto* category = mars::xlog::GetXloggerInstance(prefix);
+        if (category == nullptr) return nullptr;
+        target = reinterpret_cast<uintptr_t>(category);
+    }
+    // Mars' Android build disables C++ exceptions. Allocation failure follows
+    // the native runtime's OOM policy, just like its existing appender factory.
+    XLoggerWriter* writer = new XLoggerWriter(target, tag == nullptr ? "" : tag);
+    return writer;
+}
+
+int32_t xlogger_writer_is_enabled(const XLoggerWriter* writer, int32_t level) {
+    if (writer == nullptr || level < kLevelVerbose || level >= kLevelNone) return 0;
+    return mars::xlog::IsEnabledFor(writer->target, static_cast<TLogLevel>(level)) ? 1 : 0;
+}
+
+int32_t xlogger_writer_write(XLoggerWriter* writer, int32_t level, const char* message) {
+    if (writer == nullptr || message == nullptr || level < kLevelVerbose || level >= kLevelNone) {
+        return XLOGGER_WRITER_INVALID_ARGUMENT;
+    }
+    if (!mars::xlog::IsEnabledFor(writer->target, static_cast<TLogLevel>(level))) {
+        return XLOGGER_WRITER_FILTERED;
+    }
+    // One serialized owner (the Dart isolate). Only a reentrant hook needs a
+    // stack copy, so its metadata cannot overwrite the outer entry.
+    if (writer->writing) {
+        XLoggerInfo nested = writer->info;
+        nested.level = static_cast<TLogLevel>(level);
+        gettimeofday(&nested.timeval, nullptr);
+        nested.tid = xlogger_tid();
+        mars::xlog::XloggerWrite(writer->target, &nested, message);
+    } else {
+        writer->info.level = static_cast<TLogLevel>(level);
+        gettimeofday(&writer->info.timeval, nullptr);
+        // An isolate may resume on another OS thread; never cache this ID.
+        writer->info.tid = xlogger_tid();
+        writer->writing = true;
+        mars::xlog::XloggerWrite(writer->target, &writer->info, message);
+        writer->writing = false;
+    }
+    return XLOGGER_WRITER_OK;
+}
+
+void xlogger_writer_release(XLoggerWriter* writer) {
+    delete writer;
+}

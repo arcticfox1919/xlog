@@ -8,6 +8,8 @@ import android.widget.Toast;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 
 
 /**
@@ -64,6 +66,11 @@ public class Log {
 
         void setMaxAliveTime(long logInstancePtr, long aliveSeconds);
 
+    }
+
+    /** Optional capability; existing third-party LogImp implementations stay compatible. */
+    public interface ConfigurableLogImp extends LogImp {
+        long openLogInstance(Xlog.XLogConfig config);
     }
 
     private static LogImp debugLog = new LogImp() {
@@ -181,6 +188,11 @@ public class Log {
 
     private static LogImp logImp = debugLog;
 
+    /**
+     * Selects the backend for global calls and future instances. Existing named
+     * instances retain their creator backend; close them explicitly to stop them.
+     * Install the backend before starting producers.
+     */
     public static void setLogImp(LogImp imp) {
         logImp = imp;
     }
@@ -196,21 +208,31 @@ public class Log {
     }
 
     public static void appenderClose() {
-        if (logImp != null) {
-            logImp.appenderClose();
-            for (Map.Entry<String, LogInstance> entry : sLogInstanceMap.entrySet()) {
-                closeLogInstance(entry.getKey());
+        LogImp backend = logImp;
+        String[] prefixes;
+        synchronized (sLogInstanceMap) {
+            if (sClosingAllInstances || !sInstanceLifecycle.isEmpty()) {
+                throw new IllegalStateException("Log instance lifecycle in progress");
+            }
+            prefixes = sLogInstanceMap.keySet().toArray(new String[sLogInstanceMap.size()]);
+            sClosingAllInstances = true;
+        }
+        try {
+            if (backend != null) backend.appenderClose();
+            for (String prefix : prefixes) closeLogInstance(prefix, true);
+        } finally {
+            synchronized (sLogInstanceMap) {
+                sClosingAllInstances = false;
             }
         }
     }
 
     public static void appenderFlush() {
-        if (logImp != null) {
-            logImp.appenderFlush(0, false);
-            for (Map.Entry<String, LogInstance> entry : sLogInstanceMap.entrySet()) {
-                entry.getValue().appenderFlush();
-            }
-        }
+        LogImp backend = logImp;
+        if (backend != null) backend.appenderFlush(0, false);
+        // Owned instances remain bound to their creator if logImp is replaced.
+        // Iterate a snapshot; backend calls may modify the registry.
+        for (LogInstance instance : snapshotLogInstances()) instance.appenderFlush();
     }
 
     public static void appenderFlushSync(boolean isSync) {
@@ -400,145 +422,255 @@ public class Log {
     //     return SYS_INFO;
     // }
 
-    private static Map<String, LogInstance> sLogInstanceMap = new HashMap<>();
+    private static final Map<String, LogInstance> sLogInstanceMap = new HashMap<>();
+    // Cold lifecycle state only. Never consulted by a log write. Busy prefixes
+    // fail fast instead of waiting, including when a backend re-enters Java.
+    private static final Set<String> sInstanceLifecycle = new HashSet<>();
+    private static boolean sClosingAllInstances;
 
-    public static LogInstance openLogInstance(int level, int mode, String cacheDir, String logDir, String nameprefix, int cacheDays) {
+    private static LogInstance beginInstanceOpen(String prefix, boolean reuse) {
+        if (prefix == null || prefix.length() == 0) {
+            throw new IllegalArgumentException("Instance prefix must not be empty");
+        }
         synchronized (sLogInstanceMap) {
-            if (sLogInstanceMap.containsKey(nameprefix)) {
-                return sLogInstanceMap.get(nameprefix);
+            if (sClosingAllInstances || sInstanceLifecycle.contains(prefix)) {
+                throw new IllegalStateException("Log instance lifecycle in progress: " + prefix);
             }
-            LogInstance instance = new LogInstance(level, mode, cacheDir, logDir, nameprefix, cacheDays);
-            sLogInstanceMap.put(nameprefix, instance);
-            return instance;
+            LogInstance existing = sLogInstanceMap.get(prefix);
+            if (existing != null) {
+                if (reuse) return existing;
+                throw new IllegalStateException("Log instance already exists: " + prefix);
+            }
+            sInstanceLifecycle.add(prefix);
+            return null;
         }
     }
 
-    public static void closeLogInstance(String prefix) {
+    private static void finishInstanceLifecycle(String prefix, LogInstance created) {
         synchronized (sLogInstanceMap) {
-            if (null != logImp) {
-                if (sLogInstanceMap.containsKey(prefix)) {
-                    LogInstance logInstance = sLogInstanceMap.remove(prefix);
-                    logImp.releaseXlogInstance(prefix);
-                    logInstance.mLogInstancePtr = 0;
-                }
+            sInstanceLifecycle.remove(prefix);
+            if (created != null) sLogInstanceMap.put(prefix, created);
+        }
+    }
+
+    /** Reuses a ready instance. An overlapping open/close fails fast. */
+    public static LogInstance openLogInstance(int level, int mode, String cacheDir, String logDir, String nameprefix, int cacheDays) {
+        LogInstance existing = beginInstanceOpen(nameprefix, true);
+        if (existing != null) return existing;
+        LogInstance created = null;
+        try {
+            created = new LogInstance(level, mode, cacheDir, logDir, nameprefix, cacheDays, logImp);
+            return created;
+        } finally {
+            finishInstanceLifecycle(nameprefix, created);
+        }
+    }
+
+    /**
+     * Creates a named instance with all XLogConfig fields, including encryption
+     * and compression. Empty pubkey disables encryption; otherwise use a valid
+     * 128-hex-character secp256k1 key generated by xlog's key tool. zstd uses
+     * compresslevel; the current zlib backend retains its built-in level.
+     * Do not mutate config during this call.
+     *
+     * Only reservation/publication holds the registry monitor. Backend/JNI
+     * calls run outside it. Ready instances alone are visible to get/list;
+     * opening, closing and occupied prefixes are rejected without waiting.
+     * Failure rolls back the reservation and never registers a zero handle.
+     * Native owners must still serialize their own direct factory calls, and
+     * stop all producers/Dart writers before closing a native appender.
+     *
+     * @throws IllegalArgumentException for missing fields, invalid modes/level or key format
+     * @throws UnsupportedOperationException for an unsupported backend
+     * @throws IllegalStateException for a busy/occupied prefix or creation failure
+     */
+    public static LogInstance openLogInstance(Xlog.XLogConfig config) {
+        if (config == null || config.nameprefix == null || config.nameprefix.length() == 0
+                || config.logdir == null || config.logdir.length() == 0) {
+            throw new IllegalArgumentException("Instance configuration requires logdir and nameprefix");
+        }
+        if (config.level < Xlog.LEVEL_VERBOSE || config.level > Xlog.LEVEL_NONE
+                || (config.mode != Xlog.AppednerModeAsync && config.mode != Xlog.AppednerModeSync)
+                || (config.compressmode != Xlog.ZLIB_MODE && config.compressmode != Xlog.ZSTD_MODE)) {
+            throw new IllegalArgumentException("Invalid log level, appender mode or compression mode");
+        }
+        if (config.pubkey != null && config.pubkey.length() != 0
+                && !config.pubkey.matches("[0-9a-fA-F]{128}")) {
+            throw new IllegalArgumentException("pubkey must be empty or a 128-character hexadecimal public key");
+        }
+        LogImp backend = logImp;
+        if (!(backend instanceof ConfigurableLogImp)) {
+            throw new UnsupportedOperationException("Log backend does not support instance configuration");
+        }
+        beginInstanceOpen(config.nameprefix, false);
+        LogInstance created = null;
+        try {
+            if (backend.getXlogInstance(config.nameprefix) != 0) {
+                throw new IllegalStateException("Native log instance already exists: " + config.nameprefix);
             }
+            created = new LogInstance(config, (ConfigurableLogImp) backend);
+            return created;
+        } finally {
+            finishInstanceLifecycle(config.nameprefix, created);
+        }
+    }
+
+    /** Stop every native/Dart producer before explicitly closing an appender. */
+    public static void closeLogInstance(String prefix) {
+        closeLogInstance(prefix, false);
+    }
+
+    private static void closeLogInstance(String prefix, boolean closingAll) {
+        LogInstance instance;
+        synchronized (sLogInstanceMap) {
+            if ((!closingAll && sClosingAllInstances) || sInstanceLifecycle.contains(prefix)) {
+                throw new IllegalStateException("Log instance lifecycle in progress: " + prefix);
+            }
+            instance = sLogInstanceMap.get(prefix);
+            if (instance == null) return;
+            sInstanceLifecycle.add(prefix);
+            sLogInstanceMap.remove(prefix);
+            instance.mLogInstancePtr = 0;
+        }
+        try {
+            // No Java registry lock is held across native release/callbacks.
+            instance.mBackend.releaseXlogInstance(prefix);
+        } finally {
+            finishInstanceLifecycle(prefix, null);
         }
     }
 
     public static LogInstance getLogInstance(String prefix) {
         synchronized (sLogInstanceMap) {
-            if (sLogInstanceMap.containsKey(prefix)) {
-                return sLogInstanceMap.get(prefix);
-            }
-            return null;
+            return sLogInstanceMap.get(prefix);
+        }
+    }
+
+    private static LogInstance[] snapshotLogInstances() {
+        synchronized (sLogInstanceMap) {
+            return sLogInstanceMap.values().toArray(new LogInstance[sLogInstanceMap.size()]);
         }
     }
 
     public static class LogInstance {
 
+        // A native handle must only be passed to the backend that created it.
+        private final LogImp mBackend;
         private long mLogInstancePtr = 0;
 
         private String mPrefix = null;
 
-        private LogInstance(int level, int mode, String cacheDir, String logDir, String nameprefix, int cacheDays) {
-            if (logImp != null) {
-                mLogInstancePtr = logImp.openLogInstance(level, mode, cacheDir, logDir, nameprefix, cacheDays);
-                mPrefix = nameprefix;
+        private LogInstance(Xlog.XLogConfig config, ConfigurableLogImp backend) {
+            mBackend = backend;
+            mPrefix = config.nameprefix;
+            mLogInstancePtr = backend.openLogInstance(config);
+            if (mLogInstancePtr == 0) {
+                throw new IllegalStateException("Native log instance creation failed: " + mPrefix);
+            }
+        }
+
+        private LogInstance(int level, int mode, String cacheDir, String logDir, String nameprefix, int cacheDays, LogImp backend) {
+            if (backend == null) throw new IllegalStateException("Log backend is not installed");
+            mBackend = backend;
+            mPrefix = nameprefix;
+            mLogInstancePtr = backend.openLogInstance(level, mode, cacheDir, logDir, nameprefix, cacheDays);
+            if (mLogInstancePtr == 0) {
+                throw new IllegalStateException("Native log instance creation failed: " + mPrefix);
             }
         }
 
         public void f(String tag, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_FATAL && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_FATAL && mLogInstancePtr != 0) {
                 final String log = obj == null ? format : String.format(format, obj);
-                logImp.logF(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logF(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
         public void e(String tag, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_ERROR && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_ERROR && mLogInstancePtr != 0) {
                 String log = obj == null ? format : String.format(format, obj);
                 if (log == null) {
                     log = "";
                 }
-                logImp.logE(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logE(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
         public void w(String tag, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_WARNING && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_WARNING && mLogInstancePtr != 0) {
                 String log = obj == null ? format : String.format(format, obj);
                 if (log == null) {
                     log = "";
                 }
-                logImp.logW(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logW(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
         public void i(String tag, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_INFO && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_INFO && mLogInstancePtr != 0) {
                 String log = obj == null ? format : String.format(format, obj);
                 if (log == null) {
                     log = "";
                 }
-                logImp.logI(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logI(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
         public void d(String tag, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_DEBUG && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_DEBUG && mLogInstancePtr != 0) {
                 String log = obj == null ? format : String.format(format, obj);
                 if (log == null) {
                     log = "";
                 }
-                logImp.logD(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logD(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
         public void v(String tag, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_VERBOSE && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_VERBOSE && mLogInstancePtr != 0) {
                 String log = obj == null ? format : String.format(format, obj);
                 if (log == null) {
                     log = "";
                 }
-                logImp.logV(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logV(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
 
         public void printErrStackTrace(String tag, Throwable tr, final String format, final Object... obj) {
-            if (logImp != null && getLogLevel() <= LEVEL_ERROR && mLogInstancePtr != 0) {
+            if (getLogLevel() <= LEVEL_ERROR && mLogInstancePtr != 0) {
                 String log = obj == null ? format : String.format(format, obj);
                 if (log == null) {
                     log = "";
                 }
                 log += "  " + android.util.Log.getStackTraceString(tr);
-                logImp.logE(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
+                mBackend.logE(mLogInstancePtr, tag, "", "", Process.myTid(), Process.myPid(), Thread.currentThread().getId(), Looper.getMainLooper().getThread().getId(), log);
             }
         }
 
 
         public void appenderFlush() {
-            if (logImp != null && mLogInstancePtr != 0) {
-                logImp.appenderFlush(mLogInstancePtr, false);
+            if (mLogInstancePtr != 0) {
+                mBackend.appenderFlush(mLogInstancePtr, false);
             }
         }
 
         public void appenderFlushSync() {
-            if (logImp != null && mLogInstancePtr != 0) {
-                logImp.appenderFlush(mLogInstancePtr, true);
+            if (mLogInstancePtr != 0) {
+                mBackend.appenderFlush(mLogInstancePtr, true);
             }
         }
 
         public int getLogLevel() {
-            if (logImp != null && mLogInstancePtr != 0) {
-                return logImp.getLogLevel(mLogInstancePtr);
+            if (mLogInstancePtr != 0) {
+                return mBackend.getLogLevel(mLogInstancePtr);
             }
             return LEVEL_NONE;
         }
 
         public void setConsoleLogOpen(boolean isOpen) {
-            if (null != logImp && mLogInstancePtr != 0) {
-                logImp.setConsoleLogOpen(mLogInstancePtr, isOpen);
+            if (mLogInstancePtr != 0) {
+                mBackend.setConsoleLogOpen(mLogInstancePtr, isOpen);
             }
         }
 

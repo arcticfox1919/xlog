@@ -1,5 +1,6 @@
 {
 global:
+    xlogger_writer_*;
     xlogger_Write;
     xlogger_dump; 
     xlogger_memory_dump;

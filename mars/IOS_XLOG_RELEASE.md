@@ -11,7 +11,7 @@ Run on macOS with Xcode command line tools installed:
 
 ```sh
 cd mars
-python3 build_ios.py xlog-xcframework 1.3.1
+python3 build_ios.py xlog-xcframework 1.3.6
 ```
 
 Outputs:
@@ -34,21 +34,21 @@ plutil -p cmake_build/iOS/iOS.out/mars.xcframework/Info.plist
 The podspec expects the zip to be uploaded to the GitHub Release that matches the pod version:
 
 ```text
-https://github.com/arcticfox1919/xlog/releases/download/1.3.1/mars-xlog.xcframework.zip
+https://github.com/arcticfox1919/xlog/releases/download/1.3.6/mars-xlog.xcframework.zip
 ```
 
-Make sure tag `1.3.1` contains `mars-xlog.podspec` and the XCFramework build changes.
+Make sure tag `1.3.6` contains `mars-xlog.podspec` and the XCFramework build changes.
 
-Create or update the release for tag `1.3.1`, then upload:
+Create or update the release for tag `1.3.6`, then upload:
 
 ```sh
-gh release create 1.3.1 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --title 1.3.1 --notes "mars-xlog iOS XCFramework"
+gh release create 1.3.6 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --title 1.3.6 --notes "mars-xlog iOS XCFramework"
 ```
 
 If the release already exists:
 
 ```sh
-gh release upload 1.3.1 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --clobber
+gh release upload 1.3.6 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --clobber
 ```
 
 Validate the podspec:
@@ -63,11 +63,11 @@ pod spec lint mars-xlog.podspec --allow-warnings
 Before the podspec is pushed to a specs repo, consumers can point to this repository's podspec:
 
 ```ruby
-pod 'mars-xlog', :podspec => 'https://raw.githubusercontent.com/arcticfox1919/xlog/1.3.1/mars-xlog.podspec'
+pod 'mars-xlog', :podspec => 'https://raw.githubusercontent.com/arcticfox1919/xlog/1.3.6/mars-xlog.podspec'
 ```
 
 After publishing the podspec to a specs repo:
 
 ```ruby
-pod 'mars-xlog', '1.3.1'
+pod 'mars-xlog', '1.3.6'
 ```

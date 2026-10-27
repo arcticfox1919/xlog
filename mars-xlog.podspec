@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'mars-xlog'
-  s.version = '1.3.6'
+  s.version = '1.3.7'
   s.summary = 'Tencent Mars xlog binary framework for iOS.'
   s.description = 'Tencent Mars xlog binary XCFramework with Swift API and iOS device/simulator support.'
   s.homepage = 'https://github.com/arcticfox1919/xlog'

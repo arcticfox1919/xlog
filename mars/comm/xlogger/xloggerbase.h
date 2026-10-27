@@ -95,8 +95,8 @@ void        xlogger_Print(const XLoggerInfo* _info, const char* _format, ...);
 // and keep it intact throughout the call, including any reentrant log hooks.
 void xlogger_Write(const XLoggerInfo* _info, const char* _log);
 
-// FFI writers: bind an existing appender and fixed UTF-8 tag once, then dispatch
-// by pointer. These functions do not create or own log instances. The native
+// FFI writers bind an existing appender once and dispatch entries by pointer.
+// Each entry supplies its own tag. Writers do not create or own log instances. The native
 // owner MUST keep the appender open until every writer using it is released.
 // Release frees only the binding; it never flushes/closes the native appender.
 // Each writer has one serialized owner (for example, one Dart isolate).
@@ -122,13 +122,16 @@ enum XLoggerWriterResult {
 
 // NULL prefix explicitly selects the global appender. Missing/empty named
 // prefixes return NULL and never fall back to the global appender.
-XLOGGER_WRITER_API XLoggerWriter* xlogger_writer_acquire_existing(const char* prefix, const char* tag);
-// Synchronously consumes message. The adapter performs no instance lookup,
+XLOGGER_WRITER_API XLoggerWriter* xlogger_writer_bind_existing(const char* prefix);
+// Synchronously consumes tag and message as NUL-terminated UTF-8 strings. Both
+// buffers must remain valid until the call returns, including reentrant hooks.
+// They are borrowed for this call only; changing tag does not bind a new writer.
+// The adapter performs no instance lookup,
 // locking, refcounting or heap allocation per write. Metadata and fixed fields
-// are cached at binding; only level, timestamp and current thread ID change.
+// are cached at binding; tag, level, timestamp and current thread ID vary per entry.
 // A synchronous reentrant write uses separate stack metadata.
 // The xlog backend itself may allocate, lock or block.
-XLOGGER_WRITER_API int32_t xlogger_writer_write(XLoggerWriter* writer, int32_t level, const char* message);
+XLOGGER_WRITER_API int32_t xlogger_writer_write(XLoggerWriter* writer, int32_t level, const char* tag, const char* message);
 /**
  * Queries the current severity threshold of the appender bound to writer.
  * Uses the bound pointer directly, without an instance-name lookup, message
@@ -136,7 +139,7 @@ XLOGGER_WRITER_API int32_t xlogger_writer_write(XLoggerWriter* writer, int32_t l
  * expensive message construction; ordinary callers can just call write(),
  * which performs its own level check within the same write call.
  *
- * @param writer A live binding returned by acquire_existing(). A NULL binding
+ * @param writer A live binding returned by bind_existing(). A NULL binding
  *               returns 0. A released binding must never be passed here.
  * @param level  A TLogLevel from kLevelVerbose through kLevelFatal, inclusive.
  * @return 1 if that severity is currently enabled, otherwise 0. Invalid levels
@@ -145,7 +148,7 @@ XLOGGER_WRITER_API int32_t xlogger_writer_write(XLoggerWriter* writer, int32_t l
  *         snapshot, not a reservation: a later write checks the level again.
  */
 XLOGGER_WRITER_API int32_t xlogger_writer_is_enabled(const XLoggerWriter* writer, int32_t level);
-// Destroys only the binding allocated by acquire_existing(), including its tag.
+// Destroys only the binding allocated by bind_existing().
 // NULL is allowed. Every non-NULL binding must be released exactly once through
 // this function, never through free() or a caller's delete. The pointer becomes
 // invalid on return; a second release or any later access is undefined behavior.

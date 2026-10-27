@@ -565,6 +565,12 @@ public class Log {
         }
     }
 
+    public static Set<String> getLogInstancePrefixes() {
+        synchronized (sLogInstanceMap) {
+            return new HashSet<>(sLogInstanceMap.keySet());
+        }
+    }
+
     public static class LogInstance {
 
         // A native handle must only be passed to the backend that created it.

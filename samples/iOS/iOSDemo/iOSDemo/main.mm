@@ -55,6 +55,8 @@ int main(int argc, char * argv[]) {
         config.compress_level_ = 0;
         config.cachedir_ = "";
         config.cache_days_ = 0;
+        config.max_file_size_ = 8 * 1024 * 1024;
+        config.max_alive_time_ = 7 * 24 * 60 * 60;
         appender_open(config);
         
         return UIApplicationMain(argc, argv, nil, NSStringFromClass([AppDelegate class]));

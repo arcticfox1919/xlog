@@ -43,6 +43,8 @@ public class Xlog implements Log.ConfigurableLogImp {
 	}
 
 	public static class XLogConfig {
+		// Use dedicated log/cache directories per instance: expiry cleanup does
+		// not filter directory contents by nameprefix.
 		public int level = LEVEL_INFO;
 		public int mode = AppednerModeAsync;
 		public String logdir;
@@ -52,14 +54,29 @@ public class Xlog implements Log.ConfigurableLogImp {
 		public int compresslevel = 0;
 		public String cachedir;
 		public int cachedays = 0;
+		/** Size-based splitting threshold in bytes; 0 disables it. Not a hard cap. */
+		public long maxFileSizeBytes = 0;
+		/** Expiry threshold in whole seconds; minimum one day, default ten days. */
+		public long maxAliveTimeSeconds = 10L * 24 * 60 * 60;
 	}
 
-    public static void open(boolean isLoadLib, int level, int mode, String cacheDir, String logDir, String nameprefix, String pubkey) {
+	static void validateFilePolicy(XLogConfig config) {
+		if (config == null || config.maxFileSizeBytes < 0 || config.maxAliveTimeSeconds < 24L * 60 * 60) {
+			throw new IllegalArgumentException("maxFileSizeBytes must be nonnegative and maxAliveTimeSeconds at least 86400");
+		}
+	}
+
+	/** Opens the default logger with the same file policy fields as named instances. */
+	public static void open(boolean isLoadLib, XLogConfig logConfig) {
+		validateFilePolicy(logConfig);
 		if (isLoadLib) {
 			System.loadLibrary("c++_shared");
 			System.loadLibrary("marsxlog");
 		}
+		appenderOpen(logConfig);
+	}
 
+    public static void open(boolean isLoadLib, int level, int mode, String cacheDir, String logDir, String nameprefix, String pubkey) {
 		XLogConfig logConfig = new XLogConfig();
 		logConfig.level = level;
 		logConfig.mode = mode;
@@ -70,7 +87,7 @@ public class Xlog implements Log.ConfigurableLogImp {
 		logConfig.compresslevel = 0;
 		logConfig.cachedir = cacheDir;
 		logConfig.cachedays = 0;
-		appenderOpen(logConfig);
+		open(isLoadLib, logConfig);
 	}
 
 	private static String decryptTag(String tag) {
@@ -177,11 +194,5 @@ public class Xlog implements Log.ConfigurableLogImp {
 
 	@Override
 	public native void appenderFlush(long logInstancePtr, boolean isSync);
-
-	@Override
-	public native void setMaxFileSize(long logInstancePtr, long aliveSeconds);
-
-	@Override
-	public native void setMaxAliveTime(long logInstancePtr, long aliveSeconds);
 
 }

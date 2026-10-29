@@ -216,8 +216,12 @@ config.compress_mode_ = kZlib;
 config.compress_level_ = 0;
 config.cachedir_ = "";
 config.cache_days_ = 0;
+config.max_file_size_ = 8 * 1024 * 1024;
+config.max_alive_time_ = 7 * 24 * 60 * 60;
 appender_open(config);
 ```
+
+File size and retention are creation-only configuration for both default and named loggers. Omitted values use `0` bytes (no size-based splitting) and 10 days; retention must be at least one day. File size is a soft splitting threshold, and cleanup is delayed after opening. Reopening a named logger returns its existing instance without applying new settings. Each instance must have dedicated log/cache directories because cleanup scans the entire directory without filtering by prefix.
 
 Close xlog in function "applicationWillTerminate"
 
@@ -494,15 +498,18 @@ logConfig.compressmode = Xlog.ZLIB_MODE;
 logConfig.compresslevel = 0;
 logConfig.cachedir = "";
 logConfig.cachedays = 0;
+logConfig.maxFileSizeBytes = 8L * 1024 * 1024;
+logConfig.maxAliveTimeSeconds = 7L * 24 * 60 * 60;
+Log.setLogImp(new Xlog());
 if (BuildConfig.DEBUG) {
     logConfig.level = Xlog.LEVEL_VERBOSE;
-    Xlog.setConsoleLogOpen(true);
+    Log.setConsoleLogOpen(true);
 } else {
     logConfig.level = Xlog.LEVEL_INFO;
-    Xlog.setConsoleLogOpen(false);
+    Log.setConsoleLogOpen(false);
 }
 
-Log.setLogImp(new Xlog());
+Xlog.open(false, logConfig);
 ```
 
 程序退出时关闭日志：
@@ -623,6 +630,8 @@ config.compress_mode_ = kZlib;
 config.compress_level_ = 0;
 config.cachedir_ = "";
 config.cache_days_ = 0;
+config.max_file_size_ = 8 * 1024 * 1024;
+config.max_alive_time_ = 7 * 24 * 60 * 60;
 appender_open(config);
 ```
 

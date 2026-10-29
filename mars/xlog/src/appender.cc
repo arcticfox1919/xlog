@@ -90,8 +90,6 @@ extern void ConsoleLog(const XLoggerInfo* _info, const char* _log);
 static const int kMaxDumpLength = 4096;
 
 static const unsigned int kBufferBlockLength = 150 * 1024;
-static const long kMinLogAliveTime = 24 * 60 * 60;  // 1 days in second
-
 static Mutex sg_mutex_dir_attr;
 
 void (*g_log_write_callback)(const XLoggerInfo*, const char*) = nullptr;
@@ -132,12 +130,14 @@ static void SetConvertToUseUtf8() {
 }
 #endif
 
-XloggerAppender* XloggerAppender::NewInstance(const XLogConfig& _config, uint64_t _max_byte_size) {
-    return new XloggerAppender(_config, _max_byte_size);
+XloggerAppender* XloggerAppender::NewInstance(const XLogConfig& _config) {
+    if (!_config.IsFilePolicyValid()) return nullptr;
+    return new XloggerAppender(_config);
 }
 
-XloggerAppender* XloggerAppender::NewInstance(const XLogConfig& _config, uint64_t _max_byte_size, bool _one_shot) {
-    return new XloggerAppender(_config, _max_byte_size, _one_shot);
+XloggerAppender* XloggerAppender::NewInstance(const XLogConfig& _config, bool _one_shot) {
+    if (!_config.IsFilePolicyValid()) return nullptr;
+    return new XloggerAppender(_config, _one_shot);
 }
 
 void XloggerAppender::DelayRelease(XloggerAppender* _appender) {
@@ -154,13 +154,13 @@ void XloggerAppender::Release(XloggerAppender*& _appender) {
     _appender = nullptr;
 }
 
-XloggerAppender::XloggerAppender(const XLogConfig& _config, uint64_t _max_byte_size)
-: thread_async_(boost::bind(&XloggerAppender::__AsyncLogThread, this)), max_file_size_(_max_byte_size) {
+XloggerAppender::XloggerAppender(const XLogConfig& _config)
+: thread_async_(boost::bind(&XloggerAppender::__AsyncLogThread, this)) {
     Open(_config);
 }
 
-XloggerAppender::XloggerAppender(const XLogConfig& _config, uint64_t _max_byte_size, bool _one_shot)
-: thread_async_(boost::bind(&XloggerAppender::__AsyncLogThread, this)), max_file_size_(_max_byte_size) {
+XloggerAppender::XloggerAppender(const XLogConfig& _config, bool _one_shot)
+: thread_async_(boost::bind(&XloggerAppender::__AsyncLogThread, this)) {
     config_ = _config;
 }
 
@@ -519,7 +519,7 @@ long XloggerAppender::__GetNextFileIndex(const std::string& _fileprefix, const s
             filesize += boost::filesystem::file_size(logfilepath);
         }
     }
-    return (filesize > max_file_size_) ? index + 1 : index;
+    return (filesize > static_cast<uint64_t>(config_.max_file_size_)) ? index + 1 : index;
 }
 
 void XloggerAppender::__MakeLogFileName(const timeval& _tv,
@@ -530,7 +530,7 @@ void XloggerAppender::__MakeLogFileName(const timeval& _tv,
                                         unsigned int _len) {
     long index = 0;
     std::string logfilenameprefix = __MakeLogFileNamePrefix(_tv, _prefix);
-    if (max_file_size_ > 0) {
+    if (config_.max_file_size_ > 0) {
         index = __GetNextFileIndex(logfilenameprefix, _fileext);
     }
 
@@ -562,7 +562,8 @@ void XloggerAppender::__DelTimeoutFile(const std::string& _log_path) {
         for (boost::filesystem::directory_iterator iter(path); iter != end_iter; ++iter) {
             time_t file_modify_time = boost::filesystem::last_write_time(iter->path());
 
-            if (now_time > file_modify_time && now_time - file_modify_time > max_alive_time_) {
+            if (now_time > file_modify_time
+                && static_cast<int64_t>(now_time) - static_cast<int64_t>(file_modify_time) > config_.max_alive_time_) {
                 if (boost::filesystem::is_regular_file(iter->status())
                     && iter->path().extension() == (std::string(".") + LOG_EXT)) {
                     boost::filesystem::remove(iter->path());
@@ -1119,16 +1120,6 @@ void XloggerAppender::SetConsoleLog(bool _is_open) {
     consolelog_open_ = _is_open;
 }
 
-void XloggerAppender::SetMaxFileSize(uint64_t _max_byte_size) {
-    max_file_size_ = _max_byte_size;
-}
-
-void XloggerAppender::SetMaxAliveDuration(long _max_time) {
-    if (_max_time >= kMinLogAliveTime) {
-        max_alive_time_ = _max_time;
-    }
-}
-
 bool XloggerAppender::GetfilepathFromTimespan(int _timespan,
                                               const char* _prefix,
                                               std::vector<std::string>& _filepath_vec) {
@@ -1264,8 +1255,6 @@ static XloggerAppender* sg_default_appender = nullptr;
 static bool sg_release_guard = true;
 static bool sg_default_console_log_open = false;
 static Mutex sg_mutex;
-static uint64_t sg_max_byte_size = 0;
-static long sg_max_alive_time = 0;
 void xlogger_appender(const XLoggerInfo* _info, const char* _log) {
     if (sg_release_guard) {
         return;
@@ -1293,11 +1282,9 @@ void appender_open(const XLogConfig& _config) {
         return;
     }
 
-    sg_default_appender = XloggerAppender::NewInstance(_config, sg_max_byte_size);
+    sg_default_appender = XloggerAppender::NewInstance(_config);
+    if (nullptr == sg_default_appender) return;
     sg_default_appender->SetConsoleLog(sg_default_console_log_open);
-    if (sg_max_alive_time > 0) {
-        sg_default_appender->SetMaxAliveDuration(sg_max_alive_time);
-    }
     sg_release_guard = false;
     xlogger_SetAppender(&xlogger_appender);
     BOOT_RUN_EXIT(appender_release_default_appender);
@@ -1357,22 +1344,6 @@ void appender_set_console_log(bool _is_open) {
     sg_default_appender->SetConsoleLog(_is_open);
 }
 
-void appender_set_max_file_size(uint64_t _max_byte_size) {
-    sg_max_byte_size = _max_byte_size;
-    if (sg_release_guard) {
-        return;
-    }
-    sg_default_appender->SetMaxFileSize(_max_byte_size);
-}
-
-void appender_set_max_alive_duration(long _max_time) {
-    sg_max_alive_time = _max_time;
-    if (sg_release_guard) {
-        return;
-    }
-    sg_default_appender->SetMaxAliveDuration(_max_time);
-}
-
 bool appender_getfilepath_from_timespan(int _timespan, const char* _prefix, std::vector<std::string>& _filepath_vec) {
     if (sg_release_guard) {
         return false;
@@ -1388,7 +1359,11 @@ bool appender_make_logfile_name(int _timespan, const char* _prefix, std::vector<
 }
 
 void appender_oneshot_flush(const XLogConfig& _config, TFileIOAction* _result) {
-    auto* scoped_appender = XloggerAppender::NewInstance(_config, sg_max_byte_size, true);
+    auto* scoped_appender = XloggerAppender::NewInstance(_config, true);
+    if (nullptr == scoped_appender) {
+        if (_result) *_result = kActionOpenFailed;
+        return;
+    }
     scoped_appender->TreatMappingAsFileAndFlush(_result);
     scoped_appender->Close();
     XloggerAppender::DelayRelease(scoped_appender);

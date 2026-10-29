@@ -34,6 +34,8 @@ configuration.level = .debug
 configuration.mode = .async
 configuration.compressMode = .zlib
 configuration.compressLevel = 6
+configuration.maxFileSizeBytes = 8 * 1024 * 1024
+configuration.maxAliveTimeSeconds = 7 * 24 * 60 * 60
 
 guard MarsXLog.open(with: configuration) else {
     fatalError("Unable to create the xlog directory")
@@ -58,10 +60,12 @@ MarsXLog.close()
 
 ```swift
 let paymentConfiguration = MarsXLogConfiguration(
-    logDirectory: logDirectory,
+    logDirectory: URL(fileURLWithPath: logDirectory).appendingPathComponent("payment").path,
     namePrefix: "payment"
 )
 paymentConfiguration.level = .info
+paymentConfiguration.maxFileSizeBytes = 8 * 1024 * 1024
+paymentConfiguration.maxAliveTimeSeconds = 7 * 24 * 60 * 60
 
 if let paymentLog = MarsXLog.openInstance(with: paymentConfiguration) {
     paymentLog.info("checkout", message: "payment started")
@@ -72,7 +76,11 @@ if let paymentLog = MarsXLog.openInstance(with: paymentConfiguration) {
 }
 ```
 
-`MarsXLog` also provides verbose, debug, warning, error and fatal methods, console output control, maximum file size, maximum retention time, synchronous/asynchronous flush, instance lookup and instance release.
+File size and retention are creation-only settings for both the default logger and named instances; there are no runtime setters. Omitted settings use a size threshold of `0` (no size-based splitting) and a retention threshold of 10 days. Negative sizes or retention below one day fail creation. The size is a splitting threshold, not a hard limit; expiry is based on last modification and cleanup is delayed after opening.
+
+Opening an existing name prefix returns the same instance and ignores the new configuration. Use a dedicated log directory and cache directory for each instance: cleanup scans the entire directory, without filtering by prefix.
+
+`MarsXLog` also provides verbose, debug, warning, error and fatal methods, console output control, synchronous/asynchronous flush, instance lookup and instance release.
 
 ## CocoaPods release
 

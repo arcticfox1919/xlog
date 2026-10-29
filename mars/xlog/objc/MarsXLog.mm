@@ -40,6 +40,8 @@ static XLogConfig NativeConfiguration(MarsXLogConfiguration *configuration) {
     config.compress_level_ = static_cast<int>(configuration.compressLevel);
     config.cachedir_ = configuration.cacheDirectory.UTF8String ?: "";
     config.cache_days_ = static_cast<int>(configuration.cacheDays);
+    config.max_file_size_ = configuration.maxFileSizeBytes;
+    config.max_alive_time_ = configuration.maxAliveTimeSeconds;
     return config;
 }
 
@@ -80,6 +82,8 @@ static void WriteLog(uintptr_t instance,
         _mode = MarsXLogModeAsync;
         _compressMode = MarsXLogCompressModeZlib;
         _compressLevel = 6;
+        _maxFileSizeBytes = 0;
+        _maxAliveTimeSeconds = 10LL * 24 * 60 * 60;
     }
     return self;
 }
@@ -95,6 +99,8 @@ static void WriteLog(uintptr_t instance,
     copy.mode = self.mode;
     copy.compressMode = self.compressMode;
     copy.compressLevel = self.compressLevel;
+    copy.maxFileSizeBytes = self.maxFileSizeBytes;
+    copy.maxAliveTimeSeconds = self.maxAliveTimeSeconds;
     return copy;
 }
 
@@ -205,18 +211,6 @@ static NSMutableDictionary<NSString *, MarsXLogInstance *> *InstanceRegistry(voi
     }
 }
 
-- (void)setMaxFileSize:(int64_t)bytes {
-    @synchronized(self) {
-        if (!self.closed) mars::xlog::SetMaxFileSize(self.nativeInstance, static_cast<long>(bytes));
-    }
-}
-
-- (void)setMaxAliveTime:(NSTimeInterval)seconds {
-    @synchronized(self) {
-        if (!self.closed) mars::xlog::SetMaxAliveTime(self.nativeInstance, static_cast<long>(seconds));
-    }
-}
-
 - (NSArray<NSString *> *)filesFromTimeSpan:(NSInteger)days {
     @synchronized(self) {
         if (self.closed) return @[];
@@ -253,6 +247,8 @@ static NSMutableDictionary<NSString *, MarsXLogInstance *> *InstanceRegistry(voi
 @implementation MarsXLog
 
 + (BOOL)openWithConfiguration:(MarsXLogConfiguration *)configuration {
+    XLogConfig config = NativeConfiguration(configuration);
+    if (!config.IsFilePolicyValid()) return NO;
     if (configuration.namePrefix.length == 0 || !PrepareDirectory(configuration.logDirectory)) {
         return NO;
     }
@@ -260,7 +256,7 @@ static NSMutableDictionary<NSString *, MarsXLogInstance *> *InstanceRegistry(voi
         return NO;
     }
     xlogger_SetLevel(ToNativeLevel(configuration.level));
-    mars::xlog::appender_open(NativeConfiguration(configuration));
+    mars::xlog::appender_open(config);
     return YES;
 }
 
@@ -281,10 +277,6 @@ static NSMutableDictionary<NSString *, MarsXLogInstance *> *InstanceRegistry(voi
     mars::xlog::SetAppenderMode(0, static_cast<mars::xlog::TAppenderMode>(mode));
 }
 + (void)setConsoleLogEnabled:(BOOL)enabled { mars::xlog::SetConsoleLogOpen(0, enabled); }
-+ (void)setMaxFileSize:(int64_t)bytes { mars::xlog::SetMaxFileSize(0, static_cast<long>(bytes)); }
-+ (void)setMaxAliveTime:(NSTimeInterval)seconds {
-    mars::xlog::SetMaxAliveTime(0, static_cast<long>(seconds));
-}
 
 + (NSArray<NSString *> *)filesFromTimeSpan:(NSInteger)days prefix:(NSString *)prefix {
     std::vector<std::string> paths;
@@ -329,14 +321,16 @@ static NSMutableDictionary<NSString *, MarsXLogInstance *> *InstanceRegistry(voi
 }
 
 + (MarsXLogInstance *)openInstanceWithConfiguration:(MarsXLogConfiguration *)configuration {
-    if (configuration.namePrefix.length == 0 || !PrepareDirectory(configuration.logDirectory)) return nil;
-    if (configuration.cacheDirectory.length > 0 && !PrepareDirectory(configuration.cacheDirectory)) return nil;
+    if (configuration.namePrefix.length == 0) return nil;
 
     @synchronized(self) {
         MarsXLogInstance *existing = InstanceRegistry()[configuration.namePrefix];
         if (existing) return existing;
+        XLogConfig config = NativeConfiguration(configuration);
+        if (!config.IsFilePolicyValid() || !PrepareDirectory(configuration.logDirectory)) return nil;
+        if (configuration.cacheDirectory.length > 0 && !PrepareDirectory(configuration.cacheDirectory)) return nil;
         mars::comm::XloggerCategory *category =
-            mars::xlog::NewXloggerInstance(NativeConfiguration(configuration), ToNativeLevel(configuration.level));
+            mars::xlog::NewXloggerInstance(config, ToNativeLevel(configuration.level));
         if (!category) return nil;
         MarsXLogInstance *instance = [[MarsXLogInstance alloc]
             initWithNativeInstance:reinterpret_cast<uintptr_t>(category)

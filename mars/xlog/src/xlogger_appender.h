@@ -10,8 +10,8 @@ namespace xlog {
 class LogBaseBuffer;
 class XloggerAppender {
  public:
-    static XloggerAppender* NewInstance(const XLogConfig& _config, uint64_t _max_byte_size);
-    static XloggerAppender* NewInstance(const XLogConfig& _config, uint64_t _max_byte_size, bool _one_shot);
+    static XloggerAppender* NewInstance(const XLogConfig& _config);
+    static XloggerAppender* NewInstance(const XLogConfig& _config, bool _one_shot);
     static void DelayRelease(XloggerAppender* _appender);
     static void Release(XloggerAppender*& _appender);
 
@@ -28,16 +28,14 @@ class XloggerAppender {
     bool GetCurrentLogPath(char* _log_path, unsigned int _len);
     bool GetCurrentLogCachePath(char* _logPath, unsigned int _len);
     void SetConsoleLog(bool _is_open);
-    void SetMaxFileSize(uint64_t _max_byte_size);
-    void SetMaxAliveDuration(long _max_time);
     bool GetfilepathFromTimespan(int _timespan, const char* _prefix, std::vector<std::string>& _filepath_vec);
     bool MakeLogfileName(int _timespan, const char* _prefix, std::vector<std::string>& _filepath_vec);
 
     void TreatMappingAsFileAndFlush(TFileIOAction* _result);
 
  private:
-    XloggerAppender(const XLogConfig& _config, uint64_t _max_byte_size);
-    XloggerAppender(const XLogConfig& _config, uint64_t _max_byte_size, bool _one_shot);
+    XloggerAppender(const XLogConfig& _config);
+    XloggerAppender(const XLogConfig& _config, bool _one_shot);
 
     std::string __MakeLogFileNamePrefix(const timeval& _tv, const char* _prefix);
     void __GetFileNamesByPrefix(const std::string& _logdir,
@@ -87,8 +85,6 @@ class XloggerAppender {
 #endif
     bool log_close_ = true;
     comm::Condition cond_buffer_async_;
-    uint64_t max_file_size_ = 0;               // 0, will not split log file.
-    long max_alive_time_ = 10 * 24 * 60 * 60;  // 10 days in second
 
     time_t last_time_ = 0;
     uint64_t last_tick_ = 0;

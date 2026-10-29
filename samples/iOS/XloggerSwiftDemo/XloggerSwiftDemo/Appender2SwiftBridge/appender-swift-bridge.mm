@@ -43,7 +43,12 @@
     xlogger_SetLevel((TLogLevel)releaseLevel);
     appender_set_console_log(false);
     #endif
-    appender_open(kAppenderAsync, [logPath UTF8String], prefix, "");
+    XLogConfig config;
+    config.logdir_ = [logPath UTF8String];
+    config.nameprefix_ = prefix;
+    config.max_file_size_ = 8 * 1024 * 1024;
+    config.max_alive_time_ = 7 * 24 * 60 * 60;
+    appender_open(config);
     
 }
 

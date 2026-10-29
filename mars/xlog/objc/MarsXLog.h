@@ -28,6 +28,8 @@ typedef NS_ENUM(NSInteger, MarsXLogCompressMode) {
 
 @interface MarsXLogConfiguration : NSObject <NSCopying>
 
+// Each instance must have its own log and cache directories. Expiry cleanup
+// scans the entire directory and does not filter by namePrefix.
 @property(nonatomic, copy) NSString *logDirectory;
 @property(nonatomic, copy) NSString *namePrefix;
 @property(nonatomic, copy, nullable) NSString *cacheDirectory;
@@ -37,6 +39,10 @@ typedef NS_ENUM(NSInteger, MarsXLogCompressMode) {
 @property(nonatomic) MarsXLogMode mode;
 @property(nonatomic) MarsXLogCompressMode compressMode;
 @property(nonatomic) NSInteger compressLevel;
+// File splitting threshold in bytes (0 disables size-based splitting).
+@property(nonatomic) int64_t maxFileSizeBytes;
+// Expiry threshold in whole seconds, minimum 86400; defaults to 10 days.
+@property(nonatomic) int64_t maxAliveTimeSeconds;
 
 - (instancetype)initWithLogDirectory:(NSString *)logDirectory
                           namePrefix:(NSString *)namePrefix NS_DESIGNATED_INITIALIZER;
@@ -68,8 +74,6 @@ typedef NS_ENUM(NSInteger, MarsXLogCompressMode) {
 - (void)flushSync;
 - (void)setMode:(MarsXLogMode)mode;
 - (void)setConsoleLogEnabled:(BOOL)enabled;
-- (void)setMaxFileSize:(int64_t)bytes;
-- (void)setMaxAliveTime:(NSTimeInterval)seconds;
 - (NSArray<NSString *> *)filesFromTimeSpan:(NSInteger)days;
 - (void)close;
 
@@ -88,8 +92,6 @@ typedef NS_ENUM(NSInteger, MarsXLogCompressMode) {
 + (void)setLevel:(MarsXLogLevel)level;
 + (void)setMode:(MarsXLogMode)mode;
 + (void)setConsoleLogEnabled:(BOOL)enabled;
-+ (void)setMaxFileSize:(int64_t)bytes;
-+ (void)setMaxAliveTime:(NSTimeInterval)seconds;
 + (NSArray<NSString *> *)filesFromTimeSpan:(NSInteger)days prefix:(NSString *)prefix;
 
 + (void)logWithLevel:(MarsXLogLevel)level
@@ -106,6 +108,7 @@ typedef NS_ENUM(NSInteger, MarsXLogCompressMode) {
 + (void)error:(NSString *)tag message:(NSString *)message;
 + (void)fatal:(NSString *)tag message:(NSString *)message;
 
+// An existing namePrefix returns the same instance without applying new settings.
 + (nullable MarsXLogInstance *)openInstanceWithConfiguration:(MarsXLogConfiguration *)configuration;
 + (nullable MarsXLogInstance *)instanceForNamePrefix:(NSString *)namePrefix;
 + (NSArray<NSString *> *)instanceNamePrefixes;

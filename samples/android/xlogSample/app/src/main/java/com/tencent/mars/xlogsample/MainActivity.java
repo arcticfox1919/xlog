@@ -33,7 +33,13 @@ public class MainActivity extends AppCompatActivity {
         Xlog xlog = new Xlog();
         Log.setLogImp(xlog);
         Log.setConsoleLogOpen(true);
-        Log.appenderOpen(Xlog.LEVEL_DEBUG, Xlog.AppednerModeAsync, "", logPath, "LOGSAMPLE", 0);
+        Xlog.XLogConfig config = new Xlog.XLogConfig();
+        config.level = Xlog.LEVEL_DEBUG;
+        config.logdir = logPath;
+        config.nameprefix = "LOGSAMPLE";
+        config.maxFileSizeBytes = 8L * 1024 * 1024;
+        config.maxAliveTimeSeconds = 7L * 24 * 60 * 60;
+        Xlog.open(false, config);
 
         TextView tv = (TextView) findViewById(R.id.sample_text);
         tv.setText(stringFromJNI());

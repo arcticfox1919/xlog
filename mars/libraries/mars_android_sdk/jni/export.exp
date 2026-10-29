@@ -45,8 +45,6 @@ global:
     *mars*xlog*Flush*;
     *mars*xlog*FlushAll*;
     *mars*xlog*SetConsoleLogOpen*;
-    *mars*xlog*SetMaxFileSize*;
-    *mars*xlog*SetMaxAliveTime*;
 
 local:
     _Z22appender_set_console_logb;

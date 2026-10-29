@@ -39,6 +39,8 @@ class XloggerCategory;
 namespace mars {
 namespace xlog {
 
+// An existing nameprefix returns its current instance; new settings are ignored.
+// Each instance must use separate log/cache directories (cleanup is directory-wide).
 mars::comm::XloggerCategory* NewXloggerInstance(const XLogConfig& _config, TLogLevel _level);
 
 mars::comm::XloggerCategory* GetXloggerInstance(const char* _nameprefix);
@@ -60,10 +62,6 @@ void Flush(uintptr_t _instance_ptr, bool _is_sync);
 void FlushAll(bool _is_sync);
 
 void SetConsoleLogOpen(uintptr_t _instance_ptr, bool _is_open);
-
-void SetMaxFileSize(uintptr_t _instance_ptr, long _max_file_size);
-
-void SetMaxAliveTime(uintptr_t _instance_ptr, long _alive_seconds);
 
 // Returns the log file paths for the given instance over [_timespan] days back
 // from today (0 = today). _instance_ptr == 0 targets the global appender.

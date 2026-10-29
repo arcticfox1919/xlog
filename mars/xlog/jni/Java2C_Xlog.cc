@@ -75,8 +75,14 @@ JNIEXPORT jlong JNICALL Java_com_tencent_mars_xlog_Xlog_newXlogInstance(JNIEnv* 
                                      compresslevel,
                                      cachedir_str,
                                      cachedays};
+    config.max_file_size_ = JNU_GetField(env, _log_config, "maxFileSizeBytes", "J").j;
+    config.max_alive_time_ = JNU_GetField(env, _log_config, "maxAliveTimeSeconds", "J").j;
+    if (env->ExceptionCheck()) return 0;
     mars::comm::XloggerCategory* category = mars::xlog::NewXloggerInstance(config, (TLogLevel)level);
     if (nullptr == category) {
+        if (!config.IsFilePolicyValid()) {
+            env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "Invalid log file policy");
+        }
         return 0;
     }
     return reinterpret_cast<uintptr_t>(category);
@@ -144,6 +150,13 @@ JNIEXPORT void JNICALL Java_com_tencent_mars_xlog_Xlog_appenderOpen(JNIEnv* env,
                                      compresslevel,
                                      cachedir_str,
                                      cachedays};
+    config.max_file_size_ = JNU_GetField(env, _log_config, "maxFileSizeBytes", "J").j;
+    config.max_alive_time_ = JNU_GetField(env, _log_config, "maxAliveTimeSeconds", "J").j;
+    if (env->ExceptionCheck()) return;
+    if (!config.IsFilePolicyValid()) {
+        env->ThrowNew(env->FindClass("java/lang/IllegalArgumentException"), "Invalid log file policy");
+        return;
+    }
     appender_open(config);
     xlogger_SetLevel((TLogLevel)level);
 }
@@ -292,20 +305,6 @@ JNIEXPORT void JNICALL Java_com_tencent_mars_xlog_Xlog_setConsoleLogOpen(JNIEnv*
                                                                          jlong _log_instance_ptr,
                                                                          jboolean _is_open) {
     mars::xlog::SetConsoleLogOpen(_log_instance_ptr, _is_open);
-}
-
-JNIEXPORT void JNICALL Java_com_tencent_mars_xlog_Xlog_setMaxFileSize(JNIEnv* env,
-                                                                      jobject,
-                                                                      jlong _log_instance_ptr,
-                                                                      jlong _max_size) {
-    mars::xlog::SetMaxFileSize(_log_instance_ptr, _max_size);
-}
-
-JNIEXPORT void JNICALL Java_com_tencent_mars_xlog_Xlog_setMaxAliveTime(JNIEnv* env,
-                                                                       jobject,
-                                                                       jlong _log_instance_ptr,
-                                                                       jlong _max_time) {
-    mars::xlog::SetMaxAliveTime(_log_instance_ptr, _max_time);
 }
 
 JNIEXPORT jobjectArray JNICALL Java_com_tencent_mars_xlog_Xlog_getFilePathFromTimeSpan(JNIEnv* env,

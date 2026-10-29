@@ -51,6 +51,8 @@ enum TFileIOAction {
 
 struct XLogConfig {
     TAppenderMode mode_ = kAppenderAsync;
+    // Different instances must use separate log and cache directories: expiry
+    // cleanup scans the entire directory, not just this instance's name prefix.
     std::string logdir_;
     std::string nameprefix_;
     std::string pub_key_;
@@ -58,6 +60,15 @@ struct XLogConfig {
     int compress_level_ = 6;
     std::string cachedir_;
     int cache_days_ = 0;
+    // Size-based splitting threshold in bytes, not a hard cap. 0 disables it.
+    int64_t max_file_size_ = 0;
+    // Expiry threshold since last modification, in seconds; minimum one day.
+    // Cleanup is delayed after opening; this is not an exact deletion deadline.
+    int64_t max_alive_time_ = 10LL * 24 * 60 * 60;
+
+    bool IsFilePolicyValid() const {
+        return max_file_size_ >= 0 && max_alive_time_ >= 24 * 60 * 60;
+    }
 };
 
 #ifdef __APPLE__
@@ -83,20 +94,6 @@ void appender_set_console_log(bool _is_open);
 #ifdef __APPLE__
 void appender_set_console_fun(TConsoleFun _fun);
 #endif
-/*
- * By default, all logs will write to one file everyday. You can split logs to multi-file by changing max_file_size.
- *
- * @param _max_byte_size    Max byte size of single log file, default is 0, meaning do not split.
- */
-void appender_set_max_file_size(uint64_t _max_byte_size);
-
-/*
- * By default, all logs lives 10 days at most.
- *
- * @param _max_time    Max alive duration of a single log file in seconds, default is 10 days
- */
-void appender_set_max_alive_duration(long _max_time);
-
 void appender_oneshot_flush(const XLogConfig& _config, TFileIOAction* _result);
 
 }  // namespace xlog

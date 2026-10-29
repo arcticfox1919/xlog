@@ -42,7 +42,7 @@ static std::map<std::string, XloggerCategory*>& GetGlobalInstanceMap() {
 }
 
 XloggerCategory* NewXloggerInstance(const XLogConfig& _config, TLogLevel _level) {
-    if (_config.logdir_.empty() || _config.nameprefix_.empty()) {
+    if (_config.nameprefix_.empty()) {
         return nullptr;
     }
 
@@ -52,7 +52,9 @@ XloggerCategory* NewXloggerInstance(const XLogConfig& _config, TLogLevel _level)
         return it->second;
     }
 
-    XloggerAppender* appender = XloggerAppender::NewInstance(_config, 0);
+    if (_config.logdir_.empty()) return nullptr;
+    XloggerAppender* appender = XloggerAppender::NewInstance(_config);
+    if (nullptr == appender) return nullptr;
 
     using namespace std::placeholders;
     XloggerCategory* category = XloggerCategory::NewInstance(reinterpret_cast<uintptr_t>(appender),
@@ -170,28 +172,6 @@ void SetConsoleLogOpen(uintptr_t _instance_ptr, bool _is_open) {
         XloggerCategory* category = reinterpret_cast<XloggerCategory*>(_instance_ptr);
         XloggerAppender* appender = reinterpret_cast<XloggerAppender*>(category->GetAppender());
         return appender->SetConsoleLog(_is_open);
-    }
-}
-
-void SetMaxFileSize(uintptr_t _instance_ptr, long _max_file_size) {
-    if (0 == _instance_ptr) {
-        appender_set_max_file_size(_max_file_size);
-    } else {
-        // 目前非默认实例设置最大大小因为时序会有问题
-        // 因为设置过来的时候文件已经打开过一次
-        XloggerCategory* category = reinterpret_cast<XloggerCategory*>(_instance_ptr);
-        XloggerAppender* appender = reinterpret_cast<XloggerAppender*>(category->GetAppender());
-        return appender->SetMaxFileSize(_max_file_size);
-    }
-}
-
-void SetMaxAliveTime(uintptr_t _instance_ptr, long _alive_seconds) {
-    if (0 == _instance_ptr) {
-        appender_set_max_alive_duration(_alive_seconds);
-    } else {
-        XloggerCategory* category = reinterpret_cast<XloggerCategory*>(_instance_ptr);
-        XloggerAppender* appender = reinterpret_cast<XloggerAppender*>(category->GetAppender());
-        return appender->SetMaxAliveDuration(_alive_seconds);
     }
 }
 

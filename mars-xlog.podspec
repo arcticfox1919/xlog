@@ -32,8 +32,8 @@ THE SOFTWARE.
 
   s.platform = :ios, '11.0'
   s.source = {
-    # Add the archive SHA-256 after building the matching XCFramework.
-    :http => "https://github.com/arcticfox1919/xlog/releases/download/#{s.version}/mars-xlog.xcframework.zip"
+    :http => "https://github.com/arcticfox1919/xlog/releases/download/#{s.version}/mars-xlog.xcframework.zip",
+    :sha256 => '2daab962f1dffc2b2a3bae809a8244fe69d2b1d07134f758fa315b238171055b'
   }
 
   s.vendored_frameworks = 'mars.xcframework'

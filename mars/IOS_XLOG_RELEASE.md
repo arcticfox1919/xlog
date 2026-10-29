@@ -11,7 +11,7 @@ Run on macOS with Xcode command line tools installed:
 
 ```sh
 cd mars
-python3 build_ios.py xlog-xcframework 1.3.7
+python3 build_ios.py xlog-xcframework 1.4.0
 ```
 
 Outputs:
@@ -33,22 +33,28 @@ plutil -p cmake_build/iOS/iOS.out/mars.xcframework/Info.plist
 
 The podspec expects the zip to be uploaded to the GitHub Release that matches the pod version:
 
+The podspec version, framework short/build versions, and C++ build tag are all
+`1.4.0`. Build a new archive for this version; do not reuse an older archive or
+its SHA-256. After building on macOS, compute the checksum with
+`shasum -a 256 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip` and add it to
+the podspec's `s.source` before publishing the podspec.
+
 ```text
-https://github.com/arcticfox1919/xlog/releases/download/1.3.7/mars-xlog.xcframework.zip
+https://github.com/arcticfox1919/xlog/releases/download/1.4.0/mars-xlog.xcframework.zip
 ```
 
-Make sure tag `1.3.7` contains `mars-xlog.podspec` and the XCFramework build changes.
+Make sure tag `1.4.0` contains `mars-xlog.podspec` and the XCFramework build changes.
 
-Create or update the release for tag `1.3.7`, then upload:
+Create or update the release for tag `1.4.0`, then upload:
 
 ```sh
-gh release create 1.3.7 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --title 1.3.7 --notes "mars-xlog iOS XCFramework"
+gh release create 1.4.0 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --title 1.4.0 --notes "mars-xlog iOS XCFramework"
 ```
 
 If the release already exists:
 
 ```sh
-gh release upload 1.3.7 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --clobber
+gh release upload 1.4.0 cmake_build/iOS/iOS.out/mars-xlog.xcframework.zip --clobber
 ```
 
 Validate the podspec:
@@ -63,11 +69,11 @@ pod spec lint mars-xlog.podspec --allow-warnings
 Before the podspec is pushed to a specs repo, consumers can point to this repository's podspec:
 
 ```ruby
-pod 'mars-xlog', :podspec => 'https://raw.githubusercontent.com/arcticfox1919/xlog/1.3.7/mars-xlog.podspec'
+pod 'mars-xlog', :podspec => 'https://raw.githubusercontent.com/arcticfox1919/xlog/1.4.0/mars-xlog.podspec'
 ```
 
 After publishing the podspec to a specs repo:
 
 ```ruby
-pod 'mars-xlog', '1.3.7'
+pod 'mars-xlog', '1.4.0'
 ```

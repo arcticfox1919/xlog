@@ -400,6 +400,7 @@ def parse_as_git(path):
 
 
 def gen_mars_revision_file(version_file_path, tag=''):
+    tag = tag or '1.4.0'
     revision, path, url = parse_as_git(version_file_path)
 
     timestamp = int(time.time())

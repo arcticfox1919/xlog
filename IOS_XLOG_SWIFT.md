@@ -6,7 +6,7 @@
 
 ```bash
 cd mars
-python3 build_ios.py xlog-xcframework 1.3.7
+python3 build_ios.py xlog-xcframework 1.4.0
 ```
 
 The command creates:
@@ -84,7 +84,7 @@ Opening an existing name prefix returns the same instance and ignores the new co
 
 ## CocoaPods release
 
-Before publishing version 1.3.7, upload `mars-xlog.xcframework.zip` to the GitHub release named `1.3.7`, then run:
+Before publishing version 1.4.0, upload `mars-xlog.xcframework.zip` to the GitHub release named `1.4.0`, then run:
 
 ```bash
 pod spec lint mars-xlog.podspec --allow-warnings

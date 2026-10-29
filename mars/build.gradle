@@ -9,7 +9,7 @@ buildscript {
 }
 
 ext {
-    VERSION_NAME = '0.2.0'
-    VERSION_NAME_SUFFIX = '-SNAPSHOT'
+    VERSION_NAME = '1.4.0'
+    VERSION_NAME_SUFFIX = ''
     GROUP = 'com.tencent.mm.network'
 }

@@ -67,7 +67,7 @@ def _complete_static_framework(dst_framework, version):
     <key>CFBundleShortVersionString</key>
     <string>{version}</string>
     <key>CFBundleVersion</key>
-    <string>1</string>
+    <string>{version}</string>
 </dict>
 </plist>
 '''.format(name=name, version=version))
@@ -230,7 +230,7 @@ def build_ios_xlog(tag=''):
 
 def build_ios_xlog_xcframework(tag=''):
     gen_mars_revision_file('comm', tag)
-    version = tag if tag else '1.3.7'
+    version = tag if tag else '1.4.0'
 
     device_framework_path = INSTALL_PATH + '/iphoneos/mars.framework'
     simulator_framework_path = INSTALL_PATH + '/iphonesimulator/mars.framework'
